@@ -1,7 +1,8 @@
 package us.codecraft.blog.spider;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.google.common.collect.ArrayListMultimap;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.time.DateFormatUtils;
 import us.codecraft.blog.jsterm.Dir;
 import us.codecraft.blog.jsterm.File;
@@ -44,20 +45,17 @@ public class JstermJsonPipleine implements PageModelPipeline<OschinaBlog> {
             List<Text> blogList = new ArrayList<Text>();
             Collections.sort(oschinaBlogList);
             categoryDir.setContents(blogList);
-            java.io.File file = new java.io.File(filePath + java.io.File.separator + key);
-            file.mkdir();
             for (OschinaBlog oschinaBlog : oschinaBlogList) {
                 Text blog = new Text(oschinaBlog.getTitle());
                 blog.setContents("<h2>" + oschinaBlog.getTitle() + "</h2>" + oschinaBlog.getContent());
                 blog.setDescription(DateFormatUtils.format(oschinaBlog.getDate(), "yyyy-MM-dd HH:mm"));
                 blogList.add(blog);
-                file = new java.io.File(filePath + java.io.File.separator + key+ java.io.File.separator+oschinaBlog.getTitle().replace("/","&"));
-                try {
-                    IOUtils.write("<h2>" + oschinaBlog.getTitle() + "</h2>"+oschinaBlog.getContent(),new FileWriter(file));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
             }
+        }
+        try {
+            JSON.writeJSONStringTo(root, new FileWriter(filePath + java.io.File.separator + "oschina.json"), SerializerFeature.PrettyFormat, SerializerFeature.BrowserCompatible);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
