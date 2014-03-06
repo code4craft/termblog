@@ -73,6 +73,10 @@ div.jsterm .img, div.jsterm .img a {
    font-weight: bold;
 }
 
+div.BlogContent {
+   white-space: normal;
+}
+
 #blinker {
     line-height: .9em;
 }

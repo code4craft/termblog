@@ -495,6 +495,7 @@
    });
 
    window.typeCommand = function(command) {
+      window.scrollTo(0, document.body.scrollHeight);
       term.typeCommand(command);
    };
 })();

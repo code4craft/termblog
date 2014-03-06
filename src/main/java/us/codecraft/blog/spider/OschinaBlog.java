@@ -1,6 +1,8 @@
 package us.codecraft.blog.spider;
 
+import us.codecraft.webmagic.Page;
 import us.codecraft.webmagic.Site;
+import us.codecraft.webmagic.model.AfterExtractor;
 import us.codecraft.webmagic.model.OOSpider;
 import us.codecraft.webmagic.model.annotation.ExtractBy;
 import us.codecraft.webmagic.model.annotation.Formatter;
@@ -14,7 +16,7 @@ import java.util.Date;
  */
 @TargetUrl("http://my.oschina.net/flashsword/blog/\\d+")
 @HelpUrl("http://my.oschina.net/flashsword/blog\\?disp=1&catalog=0&sort=time&p=\\d+")
-public class OschinaBlog implements Comparable<OschinaBlog>{
+public class OschinaBlog implements Comparable<OschinaBlog>,AfterExtractor{
 
     @ExtractBy("//title/regex('>(.+?)\\s+\\-',1)")
     private String title;
@@ -56,5 +58,11 @@ public class OschinaBlog implements Comparable<OschinaBlog>{
     @Override
     public int compareTo(OschinaBlog o) {
         return date.compareTo(o.date);
+    }
+
+    @Override
+    public void afterProcess(Page page) {
+        title = title.replaceAll("\\s+","_");
+        category = category.replaceAll("\\s+","_");
     }
 }
