@@ -1,0 +1,292 @@
+<h2>webmagic使用手册</h2><div class="BlogContent">
+ <blockquote> 
+  <p>webmagic是一个开源的Java垂直爬虫框架，目标是简化爬虫的开发流程，让开发者专注于逻辑功能的开发。webmagic的核心非常简单，但是覆盖爬虫的整个流程，也是很好的学习爬虫开发的材料。</p> 
+  <p>web爬虫是一种技术，webmagic致力于将这种技术的实现成本降低，但是出于对资源提供者的尊重，webmagic不会做反封锁的事情，包括：验证码破解、代理切换、自动登录等。</p> 
+  <p>作者黄亿华(<a href="http://www.oschina.net/code4crafter@gmail.com" rel="nofollow">code4crafter</a><a href="http://my.oschina.net/zantesu" target="_blank" rel="nofollow">@gmail.com</a> )曾经在前公司进行过一年的垂直爬虫的开发，webmagic就是为了解决爬虫开发的一些重复劳动而产生的框架。</p> 
+  <p>webmagic的架构和设计参考了以下两个项目，感谢以下两个项目的作者：</p> 
+  <p>python爬虫 <strong>scrapy</strong> <a href="https://github.com/scrapy/scrapy" rel="nofollow">https://github.com/scrapy/scrapy</a></p> 
+  <p>Java爬虫 <strong>Spiderman</strong> <a href="https://gitcafe.com/laiweiwei/Spiderman" rel="nofollow">https://gitcafe.com/laiweiwei/Spiderman</a></p> 
+  <p>webmagic遵循<a href="http://www.apache.org/licenses/LICENSE-2.0.html" rel="nofollow">Apache 2.0协议</a>，你可以自由进行使用和修改。有使用不便或者问题，欢迎在github<a href="https://github.com/code4craft/webmagic/issues" rel="nofollow">提交issue</a>，或者在<a href="http://www.oschina.net/question" rel="nofollow">oschina讨论模块</a>提问。</p> 
+ </blockquote> 
+ <div></div> 
+ <span id="OSC_h2_1"></span> 
+ <h2>下载及安装</h2> 
+ <span id="OSC_h3_2"></span> 
+ <h3>使用maven</h3> 
+ <p>webmagic使用maven管理依赖，在项目中添加对应的依赖即可使用webmagic：</p> 
+ <pre class="brush: java; auto-links: false;">&lt;dependency&gt;
+        &lt;groupId&gt;us.codecraft&lt;/groupId&gt;
+        &lt;artifactId&gt;webmagic-core&lt;/artifactId&gt;
+        &lt;version&gt;0.4.2&lt;/version&gt;
+    &lt;/dependency&gt;
+    &lt;dependency&gt;
+        &lt;groupId&gt;us.codecraft&lt;/groupId&gt;
+        &lt;artifactId&gt;webmagic-extension&lt;/artifactId&gt;
+        &lt;version&gt;0.4.2&lt;/version&gt;
+    &lt;/dependency&gt;</pre> 
+ <span id="OSC_h4_3"></span> 
+ <h4>项目结构</h4> 
+ <p>webmagic主要包括两个包：</p> 
+ <ul> 
+  <li><p><strong>webmagic-core</strong></p> <p>webmagic核心部分，只包含爬虫基本模块和基本抽取器。webmagic-core的目标是成为网页爬虫的一个教科书般的实现。</p> </li> 
+  <li><p><strong>webmagic-extension</strong></p> <p>webmagic的扩展模块，提供一些更方便的编写爬虫的工具。包括注解格式定义爬虫、JSON、分布式等支持。</p> </li> 
+ </ul> 
+ <p>webmagic还包含两个可用的扩展包，因为这两个包都依赖了比较重量级的工具，所以从主要包中抽离出来，这些包需要下载源码后自己编译：</p> 
+ <ul> 
+  <li><p><strong>webmagic-saxon</strong></p> <p>webmagic与Saxon结合的模块。Saxon是一个XPath、XSLT的解析工具，webmagic依赖Saxon来进行XPath2.0语法解析支持。</p> </li> 
+  <li><p><strong>webmagic-selenium</strong></p> <p>webmagic与Selenium结合的模块。Selenium是一个模拟浏览器进行页面渲染的工具，webmagic依赖Selenium进行动态页面的抓取。</p> </li> 
+ </ul> 
+ <p>在项目中，你可以根据需要依赖不同的包。</p> 
+ <span id="OSC_h3_4"></span> 
+ <h3>不使用maven</h3> 
+ <p>不使用maven的用户，可以下载附带二进制jar包的版本(感谢<a href="http://www.oschina.net/" rel="nofollow">oschina</a>)：</p> 
+ <pre class="brush: java; auto-links: false;">git clone http://git.oschina.net/flashsword20/webmagic.git</pre> 
+ <p>在<strong>bin/lib</strong>目录下，有项目依赖的所有jar包，直接在IDE里import即可。</p> 
+ <span id="OSC_h2_5"></span> 
+ <h2>第一个爬虫</h2> 
+ <span id="OSC_h3_6"></span> 
+ <h3>定制PageProcessor</h3> 
+ <p>PageProcessor是webmagic-core的一部分，定制一个PageProcessor即可实现自己的爬虫逻辑。以下是抓取osc博客的一段代码：</p> 
+ <pre class="brush: java; auto-links: false;">public class OschinaBlogPageProcesser implements PageProcessor {
+
+        private Site site = Site.me().setDomain(&quot;my.oschina.net&quot;)
+           .addStartUrl(&quot;http://my.oschina.net/flashsword/blog&quot;);
+
+        @Override
+        public void process(Page page) {
+            List&lt;String&gt; links = page.getHtml().links().regex(&quot;http://my\\.oschina\\.net/flashsword/blog/\\d+&quot;).all();
+            page.addTargetRequests(links);
+            page.putField(&quot;title&quot;, page.getHtml().xpath(&quot;//div[@class='BlogEntity']/div[@class='BlogTitle']/h1&quot;).toString());
+            page.putField(&quot;content&quot;, page.getHtml().$(&quot;div.content&quot;).toString());
+            page.putField(&quot;tags&quot;,page.getHtml().xpath(&quot;//div[@class='BlogTags']/a/text()&quot;).all());
+        }
+
+        @Override
+        public Site getSite() {
+            return site;
+
+        }
+
+        public static void main(String[] args) {
+            Spider.create(new OschinaBlogPageProcesser())
+                 .pipeline(new ConsolePipeline()).run();
+        }
+    }</pre> 
+ <p>这里通过page.addTargetRequests()方法来增加要抓取的URL，并通过page.putField()来保存抽取结果。page.getHtml().xpath()则是按照某个规则对结果进行抽取，这里抽取支持链式调用。调用结束后，toString()表示转化为单个String，all()则转化为一个String列表。</p> 
+ <p>Spider是爬虫的入口类。Pipeline是结果输出和持久化的接口，这里ConsolePipeline表示结果输出到控制台。</p> 
+ <p>执行这个main方法，即可在控制台看到抓取结果。webmagic默认有3秒抓取间隔，请耐心等待。你可以通过site.setSleepTime(int)修改这个值。site还有一些修改抓取属性的方法。</p> 
+ <span id="OSC_h4_7"></span> 
+ <h4>使用注解</h4> 
+ <p>webmagic-extension包括了注解方式编写爬虫的方法，只需基于一个POJO增加注解即可完成一个爬虫。以下仍然是抓取oschina博客的一段代码，功能与OschinaBlogPageProcesser完全相同：</p> 
+ <pre class="brush: java; auto-links: false;">@TargetUrl(&quot;http://my.oschina.net/flashsword/blog/\\d+&quot;)
+    public class OschinaBlog {
+
+        @ExtractBy(&quot;//title&quot;)
+        private String title;
+
+        @ExtractBy(value = &quot;div.BlogContent&quot;,type = ExtractBy.Type.Css)
+        private String content;
+
+        @ExtractBy(value = &quot;//div[@class='BlogTags']/a/text()&quot;, multi = true)
+        private List&lt;String&gt; tags;
+
+        @Formatter(&quot;yyyy-MM-dd HH:mm&quot;)
+        @ExtractBy(&quot;//div[@class='BlogStat']/regex('\\d+-\\d+-\\d+\\s+\\d+:\\d+')&quot;)
+        private Date date; 
+
+        public static void main(String[] args) {
+            OOSpider.create(
+                Site.me().addStartUrl(&quot;http://my.oschina.net/flashsword/blog&quot;),
+                new ConsolePageModelPipeline(), OschinaBlog.class).run();
+        }
+    }</pre> 
+ <p>这个例子定义了一个Model类，Model类的字段'title'、'content'、'tags'均为要抽取的属性。这个类在Pipeline里是可以复用的。</p> 
+ <p>注解的详细使用方式见后文中的webmagic-extension注解模块。</p> 
+ <div></div> 
+ <span id="OSC_h2_8"></span> 
+ <h2>模块详细介绍</h2> 
+ <span id="OSC_h2_9"></span> 
+ <h2>webmagic-core</h2> 
+ <p>webmagic-core是爬虫的核心框架，只包括一个爬虫各功能模块的核心功能。webmagic-core的目标是成为网页爬虫的一个教科书般的实现。</p> 
+ <p>此节部分内容摘自作者的博文 <br /><a href="http://my.oschina.net/flashsword/blog/145796" rel="nofollow">webmagic的设计机制及原理-如何开发一个Java爬虫</a>。</p> 
+ <span id="OSC_h3_10"></span> 
+ <h3>webmagic-core的模块划分</h3> 
+ <p>webmagic-core参考了scrapy的模块划分，分为Spider(整个爬虫的调度框架)、Downloader(页面下载)、PageProcessor(链接提取和页面分析)、Scheduler(URL管理)、Pipeline(离线分析和持久化)几部分。只不过scrapy通过middleware实现扩展，而webmagic则通过定义这几个接口，并将其不同的实现注入主框架类Spider来实现扩展。</p> 
+ <p><img src="/action/blog/img_proxy?url=http%3A%2F%2Fcode4craft.github.io%2Fimages%2Fposts%2Fwebmagic.png" alt="image" /></p> 
+ <div></div> 
+ <span id="OSC_h4_11"></span> 
+ <h4>Spider类(核心调度)</h4> 
+ <p><strong>Spider</strong>是爬虫的入口类，Spider的接口调用采用了链式的API设计，其他功能全部通过接口注入Spider实现，下面是启动一个比较复杂的Spider的例子。</p> 
+ <pre class="brush: java; auto-links: false;">Spider.create(sinaBlogProcessor)
+    .scheduler(new FileCacheQueueScheduler(&quot;/data/temp/webmagic/cache/&quot;))
+    .pipeline(new FilePipeline())
+    .thread(10).run();</pre> 
+ <p>Spider的核心处理流程非常简单，代码如下：</p> 
+ <pre class="brush: java; auto-links: false;">private void processRequest(Request request) {
+        Page page = downloader.download(request, this);
+        if (page == null) {
+            sleep(site.getSleepTime());
+            return;
+        }
+        pageProcessor.process(page);
+        addRequest(page);
+        for (Pipeline pipeline : pipelines) {
+            pipeline.process(page, this);
+        }
+        sleep(site.getSleepTime());
+    }</pre> 
+ <p>Spider还包括一个方法test(String url)，该方法只抓取一个单独的页面，用于测试抽取效果。</p> 
+ <span id="OSC_h4_12"></span> 
+ <h4>PageProcessor(页面分析及链接抽取)</h4> 
+ <p>页面分析是垂直爬虫中需要定制的部分。在webmagic-core里，通过实现<strong>PageProcessor</strong>接口来实现定制爬虫。PageProcessor有两个核心方法：public void process(Page page)和public Site getSite() 。</p> 
+ <ul> 
+  <li><p>public void process(Page page)</p> <p>通过对<strong>Page</strong>对象的操作，实现爬虫逻辑。Page对象包括两个最重要的方法：addTargetRequests()可以添加URL到待抓取队列，put()可以将结果保存供后续处理。 <br />Page的数据可以通过Page.getHtml()和Page.getUrl()获取。</p> </li> 
+  <li><p>public Site getSite()</p> <p><strong>Site</strong>对象定义了爬虫的域名、起始地址、抓取间隔、编码等信息。</p> </li> 
+ </ul> 
+ <p><strong>Selector</strong>是webmagic为了简化页面抽取开发的独立模块，是webmagic-core的主要着力点。这里整合了CSS Selector、XPath和正则表达式，并可以进行链式的抽取。</p> 
+ <pre class="brush: java; auto-links: false;">//content是用别的爬虫工具抽取到的正文
+    List&lt;String&gt; links = page.getHtml()
+    .$(&quot;div.title&quot;)  //css 选择，Java里虽然很少有$符号出现，不过貌似$作为方法名是合法的
+    .xpath(&quot;//@href&quot;)  //提取链接
+    .regex(&quot;.*blog.*&quot;) //正则匹配过滤
+    .all(); //转换为string列表</pre> 
+ <p>webmagic包括一个对于页面正文的自动抽取的类<strong>SmartContentSelector</strong>。相信用过Evernote Clearly都会对其自动抽取正文的技术印象深刻。这个技术又叫<strong>Readability</strong>。当然webmagic对Readability的实现还比较粗略，但是仍有一些学习价值。</p> 
+ <p>webmagic的XPath解析使用了作者另一个开源项目：基于Jsoup的XPath解析器<a href="https://github.com/code4craft/xsoup" rel="nofollow">Xsoup</a>，Xsoup对XPath的语法进行了一些扩展，支持一些自定义的函数。这些函数的使用方式都是在XPath末尾加上<code>/name-of-function()</code>，例如：<code>&quot;//div[@class='BlogStat']/regex('\\d+-\\d+-\\d+\\s+\\d+:\\d+')&quot;</code>。</p> 
+ <table> 
+  <tbody> 
+   <tr> 
+    <td>函数</td> 
+    <td>说明</td> 
+   </tr> 
+   <tr> 
+    <td>text(n)</td> 
+    <td>第n个文本节点(0表示取所有)</td> 
+   </tr> 
+   <tr> 
+    <td>allText()</td> 
+    <td>包括子节点的所有文本</td> 
+   </tr> 
+   <tr> 
+    <td>tidyText()</td> 
+    <td>包括子节点的所有文本，并进行智能换行</td> 
+   </tr> 
+   <tr> 
+    <td>html()</td> 
+    <td>内部html(不包括当前标签本身)</td> 
+   </tr> 
+   <tr> 
+    <td>outerHtml()</td> 
+    <td>外部html(包括当前标签本身)</td> 
+   </tr> 
+   <tr> 
+    <td>regex(@attr,expr,group)</td> 
+    <td>正则表达式，@attr是抽取的属性(可省略)，expr是表达式内容，group为捕获组(可省略，默认为0)</td> 
+   </tr> 
+  </tbody> 
+ </table> 
+ <p>基于Saxon，webmagic提供了XPath2.0语法的支持。XPath2.0语法支持内部函数、逻辑控制等，是一门完整的语言，如果你熟悉XPath2.0语法，倒是不妨一试(需要引入<strong>webmagic-saxon</strong>包)。</p> 
+ <p><strong>webmagic-samples</strong>包里有一些为某个站点定制的PageProcessor，供学习之用。</p> 
+ <span id="OSC_h4_13"></span> 
+ <h4>Downloader(页面下载)</h4> 
+ <p><strong>Downloader</strong>是webmagic中下载页面的接口，主要方法：</p> 
+ <ul> 
+  <li><p>public Page download(Request request, Task task)</p> <p><strong>Request</strong>对象封装了待抓取的URL及其他信息，而Page则包含了页面下载后的Html及其他信息。Task是一个包装了任务对应的Site信息的抽象接口。</p> </li> 
+  <li><p>public void setThread(int thread)</p> <p>因为Downloader一般会涉及连接池等功能，而这些功能与多线程密切相关，所以定义了此方法。</p> </li> 
+ </ul> 
+ <p>目前有几个Downloader的实现：</p> 
+ <ul> 
+  <li><p>HttpClientDownloader</p> <p>集成了<strong>Apache HttpClient</strong>的Downloader。Apache HttpClient(4.0后整合到HttpCompenent项目中)是强大的Java http下载器，它支持自定义HTTP头(对于爬虫比较有用的就是User-agent、cookie等)、自动redirect、连接复用、cookie保留、设置代理等诸多强大的功能。</p> </li> 
+  <li><p>SeleniumDownloader</p> <p>对于一些Javascript动态加载的网页，仅仅使用http模拟下载工具，并不能取到页面的内容。这方面的思路有两种：一种是抽丝剥茧，分析js的逻辑，再用爬虫去重现它；另一种就是：内置一个浏览器，直接获取最后加载完的页面。<strong>webmagic-selenium</strong>包中整合了Selenium到SeleniumDownloader，可以直接进行动态加载页面的抓取。使用selenium需要安装一些native的工具，具体步骤可以参考作者的博文<a href="http://my.oschina.net/flashsword/blog/147334" rel="nofollow">使用Selenium来抓取动态加载的页面</a></p> </li> 
+ </ul> 
+ <span id="OSC_h4_14"></span> 
+ <h4>Scheduler(URL管理)</h4> 
+ <p><strong>Scheduler</strong>是webmagic的管理模块，通过实现Scheduler可以定制自己的URL管理器。Scheduler包括两个主要方法：</p> 
+ <ul> 
+  <li><p>public void push(Request request,Task task)</p> <p>将待抓取URL加入Scheduler。Request对象是对URL的一个封装，还包括优先级、以及一个供存储数据的Map。Task仍然用于区分不同任务，在多个任务公用一个Scheduler时可以此进行区分。</p> </li> 
+  <li><p>public Request poll(Task task)</p> <p>从Scheduler里取出一条请求，并进行后续执行。</p> </li> 
+ </ul> 
+ <p>webmagic目前有三个Scheduler的实现：</p> 
+ <ul> 
+  <li><p>QueueScheduler</p> <p>一个简单的内存队列，速度较快，并且是线程安全的。</p> </li> 
+  <li><p>FileCacheQueueScheduler</p> <p>使用文件保存队列，它可以用于耗时较长的下载任务，在任务中途停止后(手动停止或者程序崩溃)，下次执行仍然从中止的URL开始继续爬取。</p> </li> 
+  <li><p>RedisScheduler</p> <p>使用redis存储URL队列。通过使用同一台redis服务器存储URL，webmagic可以很容易的在多机部署，从而达到分布式爬虫的效果。</p> </li> 
+ </ul> 
+ <span id="OSC_h4_15"></span> 
+ <h4>Pipeline(后续处理和持久化)</h4> 
+ <p><strong>Pipeline</strong>是最终抽取结果进行输出和持久化的接口。它只包括一个方法：</p> 
+ <ul> 
+  <li><p>public void process(ResultItems resultItems,Task task)</p> <p><strong>ResultItems</strong>是集成了抽取结果的对象。通过ResultItems.get(key)可以获取抽取结果。Task同样是用于区分不同任务的对象。</p> </li> 
+ </ul> 
+ <p>webmagic包括以下几个Pipeline的实现：</p> 
+ <ul> 
+  <li><p>ConsolePipeline</p> <p>直接输出结果到控制台，测试时使用。</p> </li> 
+  <li><p>FilePipeline</p> <p>输出结果到文件，每个URL单独保存到一个页面，以URL的MD5结果作为文件名。通过构造函数<code>public FilePipeline(String path)</code>定义存储路径，<strong>以下使用文件持久化的类，多数都使用此方法指定路径</strong>。</p> </li> 
+  <li><p>JsonFilePipeline</p> <p>以JSON输出结果到文件(.json后缀)，其他与FilePipeline相同。</p> </li> 
+ </ul> 
+ <p>webmagic目前不支持持久化到数据库，但是结合其他工具，持久化到数据库也是很容易的。这里不妨看一下<a href="http://www.oschina.net/code/snippet_190591_23456" rel="nofollow">webmagic结合JFinal持久化到数据库的一段代码</a>。因为JFinal目前还不支持maven，所以这段代码并没有放到webmagic-samples里来。</p> 
+ <div></div> 
+ <span id="OSC_h2_16"></span> 
+ <h2>webmagic-extension</h2> 
+ <p>webmagic-extension是为了开发爬虫更方便而实现的一些功能模块。这些功能完全基于webmagic-core的框架，包括注解形式编写爬虫、分页、分布式等功能。</p> 
+ <span id="OSC_h3_17"></span> 
+ <h3>注解模块</h3> 
+ <p>webmagic-extension包括注解模块。为什么会有注解方式？</p> 
+ <p>因为PageProcessor的方式灵活、强大，但是没有解决两个问题：</p> 
+ <ul> 
+  <li>对于一个站点，如果想抓取多种格式的URL，那么必须在PageProcesser中写判断逻辑，代码难以管理。</li> 
+  <li>抓取结果没有对应Model，并不符合Java程序开发习惯，与一些框架也无法很好整合。</li> 
+ </ul> 
+ <p>注解的核心是Model类，本身是一个POJO，这个Model类用于传递、保存页面最终抓取结果数据。注解方式直接将抽取与数据绑定，以便于编写和维护。</p> 
+ <p>注解方式其实也是通过一个PageProcessor的实现–ModelPageProcessor完成，因此对webmagic-core代码没有任何影响。仍然以抓取OschinaBlog的程序为例：</p> 
+ <pre class="brush: java; auto-links: false;">@TargetUrl(&quot;http://my.oschina.net/flashsword/blog/\\d+&quot;)
+    public class OschinaBlog {
+
+        @ExtractBy(&quot;//title&quot;)
+        private String title;
+
+        @ExtractBy(value = &quot;div.BlogContent&quot;,type = ExtractBy.Type.Css)
+        private String content;
+
+        @ExtractBy(value = &quot;//div[@class='BlogTags']/a/text()&quot;, multi = true)
+        private List&lt;String&gt; tags;
+
+        @Formatter(&quot;yyyy-MM-dd HH:mm&quot;)
+        @ExtractBy(&quot;//div[@class='BlogStat']/regex('\\d+-\\d+-\\d+\\s+\\d+:\\d+')&quot;)
+        private Date date; 
+
+        public static void main(String[] args) {
+            OOSpider.create(
+                Site.me().addStartUrl(&quot;http://my.oschina.net/flashsword/blog&quot;),
+                new ConsolePageModelPipeline(), OschinaBlog.class).run();
+        }
+    }</pre> 
+ <p>注解部分包括以下内容：</p> 
+ <ul> 
+  <li><span id="OSC_h4_18"></span><h4>TargetUrl</h4> <p>“TargetUrl&quot;表示这个Model对应要抓取的URL，它包含两层意思：符合这个条件的URL会被加入抓取队列；符合这个条件的URL会被这个Model抓取。TargetUrl可以<strong>sourceRegion</strong>指定提取URL的区域(仅支持XPath)。</p> <p>TargetUrl使用了正则表达式，匹配 “http://my.oschina.net/flashsword/blog/150039” 格式的URL。webmagic对正则表达式进行了修改，“.“仅表示字符”.“而不代表任意字符，而”*“则代表了”.*“，例如&quot;http://*.oschina.net/*“代表了oschina所有的二级域名下的URL。</p> <p>与TargetUrl相似的还有<strong>HelpUrl</strong>，HelpUrl表示：仅仅抓取该URL用作链接提取，并不对它进行内容抽取。例如博客正文页对应TargetUrl，而列表页则对应HelpUrl。</p> </li> 
+  <li><span id="OSC_h4_19"></span><h4>ExtractBy</h4> 
+   <ul> 
+    <li><span id="OSC_h4_20"></span><h4>用于字段</h4> <p>“ExtractBy&quot;可用于类以及字段。用于字段时，定义了字段抽取的规则。抽取的规则默认使用<a href="http://www.w3school.com.cn/xpath/" rel="nofollow"><strong>XPath</strong></a>，也可以选择使用CSS Selector、正则表达式(通过设置type)。</p> <p>ExtractBy还有几个扩展属性。<strong>multi</strong>表示是否抽取列表，当然，设置为multi时，你需要一个List字段去容纳它。<strong>notnull</strong>则表示，此字段不允许为null，若为null则放弃整个对象。</p> </li> 
+    <li><span id="OSC_h4_21"></span><h4>用于类</h4> <p>“ExtractBy&quot;用于类时，则限定了字段抽取的区域。用于类时仍支持multi，multi则表示一个页面可以抽取到多个对象。</p> </li> 
+    <li><span id="OSC_h4_22"></span><h4>ExtractByUrl</h4> <p>ExtractByUrl表示从URL中抽取信息，只支持正则表达式。</p> </li> 
+    <li><span id="OSC_h4_23"></span><h4>ComboExtract</h4> <p>ComboExtract是对ExtractBy的一个补充，支持将对个抽取规则用and或者or的形式组合起来。</p> </li> 
+   </ul> </li> 
+  <li><span id="OSC_h4_24"></span><h4>类型转换</h4> <p>webmagic的注解模式支持对抽取结果进行类型转换，这样抽取结果并不需要是String类型，而可以是任意类型。webmagic内置了基本类型的支持(需要保证抽取结果能够被转换到对应类型)。</p> </li> 
+ </ul> 
+ <pre class="brush: java; auto-links: false;">@ExtractBy(&quot;//ul[@class='pagehead-actions']/li[1]//a[@class='social-count js-social-count']/text()&quot;)
+        private int star;</pre> 
+ <p>抽取结果也可以是<code>java.util.Date</code>类型，不过需要指定日期格式化的方式：</p> 
+ <pre class="brush: java; auto-links: false;">@Formatter(&quot;yyyy-MM-dd HH:mm&quot;)
+        @ExtractBy(&quot;//div[@class='BlogStat']/regex('\\d+-\\d+-\\d+\\s+\\d+:\\d+')&quot;)
+        private Date date;</pre> 
+ <p>你也可以编写一个实现<code>ObjectFormatter</code>接口的类，进行自己的类型解析。要使用自己的类，需要调用<code>ObjectFormatters.put()</code>对这个类进行注册。</p> 
+ <ul> 
+  <li><span id="OSC_h4_25"></span><h4>AfterExtractor</h4> <p>AfterExtractor接口是对注解方式抽取能力不足的补充。实现AfterExtractor接口后，会在<strong>使用注解方式填充完字段后</strong>调用<strong>afterProcess()</strong>方法，在这个方法中可以直接访问已抽取的字段、补充需要抽取的字段，甚至做一些简单的输出和持久化操作(并不是很建议这么做)。这部分可以参考<a href="http://www.oschina.net/code/snippet_190591_23456" rel="nofollow">webmagic结合JFinal持久化到数据库的一段代码</a>。</p> </li> 
+  <li><span id="OSC_h4_26"></span><h4>OOSpider</h4> <p>OOSpider是注解式爬虫的入口，这里调用<strong>create()</strong>方法将OschinaBlog这个类加入到爬虫的抽取中，这里是可以传入多个类的，例如：</p> </li> 
+ </ul> 
+ <pre class="brush: java; auto-links: false;">OOSpider.create(
+            Site.me().addStartUrl(&quot;http://www.oschina.net&quot;),
+            new ConsolePageModelPipeline(),
+            OschinaBlog.clas,OschinaAnswer.class).run();</pre> 
+ <pre class="brush: java; auto-links: false;">OOSpider会根据TargetUrl调用不同的Model进行解析。</pre> 
+ <ul> 
+  <li><span id="OSC_h4_27"></span><h4>PageModelPipeline</h4> <p>可以通过定义PageModelPipeline来选择结果输出方式。这里new ConsolePageModelPipeline()是PageModelPipeline的一个实现，会将结果输出到控制台。</p> <p>PageModelPipeline目前包括<code>ConsolePageModelPipeline</code>、<code>JsonFilePageModelPi

@@ -1,0 +1,221 @@
+<h2>构建一个可靠的分布式计数器--memcached之incr/decr操作实战分析</h2><div class="BlogContent">
+ <p> &nbsp;最近的项目要依赖于一个分布式计数器的实现，因为公司使用memcached历史已久，所以就想到了使用memcached来作为计数器。之前也用过memcached的incr操作，但是有人封装好了，也没有深究，自己测试起来，越到了问题。经过大半天的调试、查阅文档、查看源码，解决了问题，现在将收集到的信息整理一下。 </p> 
+ <p> &nbsp;&nbsp;&nbsp;incr/decr是memcached 1.2.4加入的原子性整数操作(<a href="https://github.com/memcached/memcached/blob/master/ChangeLog" target="_blank" rel="nofollow">changelog:2006-10-03</a>)。这个功能常用于分布式项目中的计数。 </p> 
+ <p> <strong>1.incr/decr在memcached中的保存方式是：字符串(十进制)表示的无符号64bit整数。 &nbsp;&nbsp;&nbsp;</strong>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; </p> 
+ <p> &nbsp;&nbsp;&nbsp;memcached的wiki中这样描述： </p> 
+ <p> &nbsp;&nbsp;&nbsp;<span style="text-decoration:underline !important;">Increment and Decrement. If an item stored is the string representation of a 64bit integer, you may run incr or decr commands to modify that number. You may only incr by positive values, or decr by positive values. They does not accept negative values.</span> </p> 
+ <p> &nbsp;&nbsp;&nbsp;&nbsp;为了验证，在memcached telnet终端中如下操作： </p> 
+ <div> 
+  <div> 
+   <table border="0" cellpadding="0" cellspacing="0" style="width:700px;margin:0px !important;padding:0px !important;font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;height:auto !important;text-align:left !important;"> 
+    <tbody> 
+     <tr> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;color:#AFAFAF !important;"> 
+       <div>
+         1 
+       </div> 
+       <div>
+         2 
+       </div> 
+       <div>
+         3 
+       </div> 
+       <div>
+         4 
+       </div> 
+       <div>
+         5 
+       </div> 
+       <div>
+         6 
+       </div> 
+       <div>
+         7 
+       </div> 
+       <div>
+         8 
+       </div> 
+       <div>
+         9 
+       </div> 
+       <div>
+         10 
+       </div> 
+       <div>
+         11 
+       </div> 
+       <div>
+         12 
+       </div> 
+       <div>
+         13 
+       </div> 
+       <div>
+         14 
+       </div> 
+       <div>
+         15 
+       </div> 
+       <div>
+         16 
+       </div> 
+       <div>
+         17 
+       </div> 
+       <div>
+         18 
+       </div> 
+       <div>
+         19 
+       </div> </td> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;"> 
+       <div> 
+        <div>
+          seta 0 0 2 
+        </div> 
+        <div>
+          12 
+        </div> 
+        <div>
+          STORED 
+        </div> 
+        <div>
+          &nbsp;&nbsp;#设置key=a的项为&quot;12&quot; 
+        </div> 
+        <div>
+          incr a 1&nbsp;&nbsp;&nbsp;&nbsp; 
+        </div> 
+        <div>
+          13 
+        </div> 
+        <div>
+          &nbsp;&nbsp;#incr 1 返回13 
+        </div> 
+        <div>
+          append a 0 0 1 
+        </div> 
+        <div>
+          3 
+        </div> 
+        <div>
+          STORED 
+        </div> 
+        <div>
+          &nbsp;&nbsp;#在a项后面增加一个字符'3' 
+        </div> 
+        <div>
+          get a 
+        </div> 
+        <div>
+          VALUE a 0 3 
+        </div> 
+        <div>
+          133 
+        </div> 
+        <div>
+          END 
+        </div> 
+        <div>
+          &nbsp;&nbsp;#a变为133 
+        </div> 
+        <div>
+          incr a 1 
+        </div> 
+        <div>
+          134 
+        </div> 
+        <div>
+          &nbsp;&nbsp;#a incr 1后变为134 
+        </div> 
+       </div> </td> 
+     </tr> 
+    </tbody> 
+   </table> 
+  </div> 
+ </div> 
+ <p> &nbsp;&nbsp;&nbsp;可以看到，在把a当做字符串进行append操作后，得到字符串133，此时incr 1，变为134，证明memcached内部确实incr项将保存为字符串。 </p> 
+ <p> &nbsp;&nbsp;&nbsp;那么，如果我们使用二进制协议，将a写入数字后，再使用incr会产生什么结果呢？(使用Java语言，memcached客户端为：spymemcached-2.5)。 </p> 
+ <div> 
+  <div> 
+   <table border="0" cellpadding="0" cellspacing="0" style="width:700px;margin:0px !important;padding:0px !important;font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;height:auto !important;text-align:left !important;"> 
+    <tbody> 
+     <tr> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;color:#AFAFAF !important;"> 
+       <div>
+         1 
+       </div> 
+       <div>
+         2 
+       </div> 
+       <div>
+         3 
+       </div> 
+       <div>
+         4 
+       </div> 
+       <div>
+         5 
+       </div> 
+       <div>
+         6 
+       </div> </td> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;"> 
+       <div> 
+        <div>
+          memcachedClient.set(key, exp,51); 
+        </div> 
+        <div>
+          Object object = memcachedClient.get(key); 
+        </div> 
+        <div>
+          System.out.println(&quot;init &quot;+ object); 
+        </div> 
+        <div>
+          longincr = memcachedClient.incr(key,1); 
+        </div> 
+        <div>
+          object = memcachedClient.get(key); 
+        </div> 
+        <div>
+          System.out.println(&quot;after incr &quot;+ incr +&quot; &quot;+ (object)); 
+        </div> 
+       </div> </td> 
+     </tr> 
+    </tbody> 
+   </table> 
+  </div> 
+ </div> 
+ <p> &nbsp;&nbsp;&nbsp;输出为： </p> 
+ <div> 
+  <div> 
+   <table border="0" cellpadding="0" cellspacing="0" style="width:700px;margin:0px !important;padding:0px !important;font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;height:auto !important;text-align:left !important;"> 
+    <tbody> 
+     <tr> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;color:#AFAFAF !important;"> 
+       <div>
+         1 
+       </div> 
+       <div>
+         2 
+       </div> </td> 
+      <td style="font-size:1em !important;font-family:Consolas, 'Bitstream Vera Sans Mono', 'Courier New', Courier, monospace !important;border:0px !important;vertical-align:baseline !important;"> 
+       <div> 
+        <div>
+          init 51 
+        </div> 
+        <div>
+          after incr 4 52 
+        </div> 
+       </div> </td> 
+     </tr> 
+    </tbody> 
+   </table> 
+  </div> 
+ </div> 
+ <p> &nbsp;&nbsp;&nbsp;是不是无法理解？按道理，incr的返回值就是memcached中的最终结果，与get结果相同。结果一个返回4，一个返回52？ </p> 
+ <p> &nbsp;&nbsp;&nbsp;等等，4和52，为什么看起来那么眼熟？ </p> 
+ <p> &nbsp;&nbsp;&nbsp;查阅ascii表得知，4的ascii值刚好是52，难道真这么巧，第二次get的时候，spymemcached客户端将4的字符值当做整型展开，得到了52？ </p> 
+ <p> &nbsp;&nbsp;&nbsp;不急，先使用telnet终端连接memcached，得到： </p> 
+ <div> 
+  <div> 
+   <table border="0" cellpadding="0" cellspacing="0" style="width:700px;margin:0px !important;padding:0px !important;font-size:1em !important;font-fami

@@ -1,0 +1,70 @@
+<h2>Netty那点事（二）Netty中的buffer</h2><div class="BlogContent">
+ <p>上一篇文章我们概要介绍了Netty的原理及结构，下面几篇文章我们开始对Netty的各个模块进行比较详细的分析。Netty的结构最底层是buffer机制，这部分也相对独立，我们就先从buffer讲起。</p> 
+ <span id="OSC_h2_1"></span> 
+ <h2>What: buffer二三事</h2> 
+ <p>buffer中文名又叫缓冲区，按照维基百科的解释，是&quot;在数据传输时，在内存里开辟的一块临时保存数据的区域”。它其实是一种化同步为异步的机制，可以解决数据传输的速率不对等以及不稳定的问题。</p> 
+ <p>根据这个定义，我们可以知道涉及I/O(特别是I/O写)的地方，基本会有buffer的存在。就Java来说，我们非常熟悉的Old I/O–<code>InputStream</code>&amp;<code>OutputStream</code>系列API，基本都是在内部使用到了buffer。Java课程老师就教过，必须调用<code>OutputStream.flush()</code>，才能保证数据写入生效！</p> 
+ <p>而NIO中则直接将buffer这个概念封装成了对象，其中最常用的大概是ByteBuffer了。于是使用方式变为了：将数据写入Buffer，flip()一下，然后将数据读出来。于是，buffer的概念更加深入人心了！</p> 
+ <p>Netty中的buffer也不例外。不同的是，Netty的buffer专为网络通讯而生，所以它又叫ChannelBuffer(好吧其实没有什么因果关系…)。我们下面就来讲讲Netty中的buffer。当然，关于Netty，我们必须讲讲它的所谓&quot;Zero-Copy-Capable&quot;机制。</p> 
+ <span id="OSC_h2_2"></span> 
+ <h2>When &amp; Where: TCP/IP协议与buffer</h2> 
+ <p>TCP/IP协议是目前的主流网络协议。它是一个多层协议，最下层是物理层，最上层是应用层(HTTP协议等)，而在Java开发中，一般只接触TCP以上，即传输层和应用层的内容。这也是Netty的主要应用场景。</p> 
+ <p>TCP报文有个比较大的特点，就是它传输的时候，会先把应用层的数据项拆开成字节，然后按照自己的传输需要，选择合适数量的字节进行传输。什么叫&quot;自己的传输需要”？首先TCP包有最大长度限制，那么太大的数据项肯定是要拆开的。其次因为TCP以及下层协议会附加一些协议头信息，如果数据项太小，那么可能报文大部分都是没有价值的头信息，这样传输是很不划算的。因此有了收集一定数量的小数据，并打包传输的Nagle算法(这个东东在HTTP协议里会很讨厌，Netty里可以用setOption(“tcpNoDelay”, true)关掉它)。</p> 
+ <p>这么说可能太学院派了一点，我们举个例子吧：</p> 
+ <p>发送时，我们这样分3次写入('|'表示两个buffer的分隔):</p> 
+ <pre class="brush: java; auto-links: false;">+-----+-----+-----+
+   | ABC | DEF | GHI |
+   +-----+-----+-----+</pre> 
+ <p>接收时，可能变成了这样:</p> 
+ <pre class="brush: java; auto-links: false;">+----+-------+---+---+
+   | AB | CDEFG | H | I |
+   +----+-------+---+---+</pre> 
+ <p>很好懂吧？可是，说了这么多，跟buffer有个什么关系呢？别急，我们来看下面一部分。</p> 
+ <span id="OSC_h2_3"></span> 
+ <h2>Why: buffer中的分层思想</h2> 
+ <p>我们先回到之前的<code>messageReceived</code>方法：</p> 
+ <pre class="brush: java; auto-links: false;">public void messageReceived(
+        ChannelHandlerContext ctx, MessageEvent e) {
+    // Send back the received message to the remote peer.
+    transferredBytes.addAndGet(((ChannelBuffer) e.getMessage()).readableBytes());
+    e.getChannel().write(e.getMessage());
+}</pre> 
+ <p>这里<code>MessageEvent.getMessage()</code>默认的返回值是一个<code>ChannelBuffer</code>。我们知道，业务中需要的&quot;Message”，其实是一条应用层级别的完整消息，而一般的buffer工作在传输层，与&quot;Message&quot;是不能对应上的。那么这个ChannelBuffer是什么呢？</p> 
+ <p>来一个官方给的图，我想这个答案就很明显了：</p> 
+ <p><img src="http://static.oschina.net/uploads/space/2013/0925/225747_kDAk_190591.png" alt="virtual buffer in Netty" /></p> 
+ <p>这里可以看到，TCP层HTTP报文被分成了两个ChannelBuffer，这两个Buffer对我们上层的逻辑(HTTP处理)是没有意义的。但是两个ChannelBuffer被组合起来，就成为了一个有意义的HTTP报文，这个报文对应的ChannelBuffer，才是能称之为&quot;Message&quot;的东西。这里用到了一个词&quot;Virtual Buffer”，也就是所谓的&quot;Zero-Copy-Capable Byte Buffer&quot;了。顿时觉得豁然开朗了有没有！</p> 
+ <p>我这里总结一下，<strong>如果说NIO的Buffer和Netty的ChannelBuffer最大的区别的话，就是前者仅仅是传输上的Buffer，而后者其实是传输Buffer和抽象后的逻辑Buffer的结合。</strong>延伸开来说，NIO仅仅是一个网络传输框架，而Netty是一个网络应用框架，包括网络以及应用的分层结构。</p> 
+ <p>当然，在Netty里，默认使用<code>ChannelBuffer</code>表示&quot;Message”，不失为一个比较实用的方法，但是<code>MessageEvent.getMessage()</code>是可以存放一个POJO的，这样子抽象程度又高了一些，这个我们在以后讲到<code>ChannelPipeline</code>的时候会说到。</p> 
+ <span id="OSC_h2_4"></span> 
+ <h2>How: Netty中的ChannelBuffer及实现</h2> 
+ <p>好了，终于来到了代码实现部分。之所以啰嗦了这么多，因为我觉得，关于&quot;Zero-Copy-Capable Rich Byte Buffer”，理解为什么需要它，比理解它是怎么实现的，可能要更重要一点。</p> 
+ <p>我想可能很多朋友跟我一样，喜欢&quot;顺藤摸瓜&quot;式读代码–找到一个入口，然后顺着查看它的调用，直到理解清楚。很幸运，<code>ChannelBuffers</code>(注意有s!)就是这样一根&quot;藤”，它是所有ChannelBuffer实现类的入口，它提供了很多静态的工具方法来创建不同的Buffer，靠“顺藤摸瓜”式读代码方式，大致能把各种ChannelBuffer的实现类摸个遍。先列一下ChannelBuffer相关类图。</p> 
+ <p><img src="http://static.oschina.net/uploads/space/2013/0925/081551_v8pK_190591.png" alt="channel buffer in Netty" /></p> 
+ <p>此外还有<code>WrappedChannelBuffer</code>系列也是继承自<code>AbstractChannelBuffer</code>，图放到了后面。</p> 
+ <span id="OSC_h3_5"></span> 
+ <h3>ChannelBuffer中的readerIndex和writerIndex</h3> 
+ <p>开始以为Netty的ChannelBuffer是对NIO ByteBuffer的一个封装，其实不是的，<strong>它是把ByteBuffer重新实现了一遍</strong>。</p> 
+ <p>以最常用的<code>HeapChannelBuffer</code>为例，其底层也是一个byte[]，与ByteBuffer不同的是，它是可以同时进行读和写的，而不需要使用flip()进行读写切换。ChannelBuffer读写的核心代码在<code>AbstactChannelBuffer</code>里，这里通过readerIndex和writerIndex两个整数，分别指向当前读的位置和当前写的位置，并且，readerIndex总是小于writerIndex的。贴两段代码，让大家能看的更明白一点：</p> 
+ <pre class="brush: java; auto-links: false;">public void writeByte(int value) {
+    setByte(writerIndex ++, value);
+}
+
+public byte readByte() {
+    if (readerIndex == writerIndex) {
+        throw new IndexOutOfBoundsException(&quot;Readable byte limit exceeded: &quot;
+                + readerIndex);
+    }
+    return getByte(readerIndex ++);
+}
+
+public int writableBytes() {
+    return capacity() - writerIndex;
+}
+
+public int readableBytes() {
+    return writerIndex - readerIndex;
+}</pre> 
+ <p>我倒是觉得这样的方式非常自然，比单指针与flip()要更加好理解一些。AbstactChannelBuffer还有两个相应的mark指针<code>markedReaderIndex</code>和<code>markedWriterIndex</code>，跟NIO的原理是一样的，这里不再赘述了。</p> 
+ <span id="OSC_h3_6"></span> 
+ <h3>字节序Endianness与HeapChannelBuffer</h3> 
+ <p>在创建Buffer时，我们注意到了这样一个方法：<code>public static ChannelBuffer buffer(ByteOrder endianness, int capaci

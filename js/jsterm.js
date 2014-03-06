@@ -489,7 +489,7 @@
       term.enqueue('login')
           .enqueue('yihua')
           .enqueue('******')
-          .enqueue('cat file1')
+          .enqueue('cat README')
           .enqueue('ls -l')
           .enqueue('tree')
           .begin();

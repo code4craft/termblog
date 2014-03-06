@@ -1,0 +1,97 @@
+<h2>1000行代码读懂Spring（二）- 在Spring中实现AOP</h2><div class="BlogContent">
+ <span id="OSC_h2_1"></span> 
+ <h2>关于AOP</h2> 
+ <p>AOP是Spring核心功能之一。今天就用tiny-spring来实现一个AOP。具体功能会包括：</p> 
+ <ol> 
+  <li>读取AspectJ格式的Pointcut描述。</li> 
+  <li>使用JDK动态代理以及CGLib两种方式进行AOP织入。</li> 
+ </ol> 
+ <p>AOP分为配置(Pointcut，Advice)，织入(Weave)两部分工作，当然还有一部分是将AOP整合到整个容器的生命周期中。</p> 
+ <p>AOP相关概念较多，我不会一一列举，但是会在每一步对概念做一点解释。</p> 
+ <span id="OSC_h2_2"></span> 
+ <h2>7.step7-使用JDK动态代理实现AOP织入</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-7-method-interceptor-by-jdk-dynamic-proxy</pre> 
+ <p>织入（weave）相对简单，我们先从它开始。Spring AOP的织入点是<code>AopProxy</code>，它包含一个方法<code>Object getProxy()</code>来获取代理后的对象。</p> 
+ <p>在Spring AOP中，我觉得最重要的两个角色，就是我们熟悉的<code>MethodInterceptor</code>和<code>MethodInvocation</code>（这两个角色都是AOP联盟的标准），它们分别对应AOP中两个基本角色：<code>Advice</code>和<code>Joinpoint</code>。Advice定义了在切点指定的逻辑，而Joinpoint则代表切点。</p> 
+ <pre class="brush: java; auto-links: false;">public interface MethodInterceptor extends Interceptor {
+
+    Object invoke(MethodInvocation invocation) throws Throwable;
+}</pre> 
+ <p>Spring的AOP只支持方法级别的调用，所以其实在AopProxy里，我们只需要将MethodInterceptor放入对象的方法调用即可。</p> 
+ <p>我们称被代理对象为<code>TargetSource</code>，而<code>AdvisedSupport</code>就是保存TargetSource和MethodInterceptor的元数据对象。这一步我们先实现一个基于JDK动态代理的<code>JdkDynamicAopProxy</code>，它可以对接口进行代理。于是我们就有了基本的织入功能。</p> 
+ <pre class="brush: java; auto-links: false;">@Test
+    public void testInterceptor() throws Exception {
+        // --------- helloWorldService without AOP
+        ApplicationContext applicationContext = new ClassPathXmlApplicationContext(&quot;tinyioc.xml&quot;);
+        HelloWorldService helloWorldService = (HelloWorldService) applicationContext.getBean(&quot;helloWorldService&quot;);
+        helloWorldService.helloWorld();
+
+        // --------- helloWorldService with AOP
+        // 1. 设置被代理对象(Joinpoint)
+        AdvisedSupport advisedSupport = new AdvisedSupport();
+        TargetSource targetSource = new TargetSource(helloWorldService, HelloWorldServiceImpl.class,
+                HelloWorldService.class);
+        advisedSupport.setTargetSource(targetSource);
+
+        // 2. 设置拦截器(Advice)
+        TimerInterceptor timerInterceptor = new TimerInterceptor();
+        advisedSupport.setMethodInterceptor(timerInterceptor);
+
+        // 3. 创建代理(Proxy)
+        JdkDynamicAopProxy jdkDynamicAopProxy = new JdkDynamicAopProxy(advisedSupport);
+        HelloWorldService helloWorldServiceProxy = (HelloWorldService) jdkDynamicAopProxy.getProxy();
+
+        // 4. 基于AOP的调用
+        helloWorldServiceProxy.helloWorld();
+
+    }</pre> 
+ <span id="OSC_h2_3"></span> 
+ <h2>8.step8-使用AspectJ管理切面</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-8-invite-pointcut-and-aspectj</pre> 
+ <p>完成了织入之后，我们要考虑另外一个问题：对什么类以及什么方法进行AOP？对于“在哪切”这一问题的定义，我们又叫做“Pointcut”。Spring中关于Pointcut包含两个角色：<code>ClassFilter</code>和<code>MethodMatcher</code>，分别是对类和方法做匹配。Pointcut有很多种定义方法，例如类名匹配、正则匹配等，但是应用比较广泛的应该是和<code>AspectJ</code>表达式的方式。</p> 
+ <p><code>AspectJ</code>是一个“对Java的AOP增强”。它最早是其实是一门语言，我们跟写Java代码一样写它，然后静态编译之后，就有了AOP的功能。下面是一段AspectJ代码：</p> 
+ <pre class="brush: java; auto-links: false;">aspect PointObserving {
+    private Vector Point.observers = new Vector();
+
+    public static void addObserver(Point p, Screen s) {
+        p.observers.add(s);
+    }
+    public static void removeObserver(Point p, Screen s) {
+        p.observers.remove(s);
+    }
+    ...
+}</pre> 
+ <p>这种方式无疑太重了，为了AOP，还要适应一种语言？所以现在使用也不多，但是它的<code>Pointcut</code>表达式被Spring借鉴了过来。于是我们实现了一个<code>AspectJExpressionPointcut</code>：</p> 
+ <pre class="brush: java; auto-links: false;">@Test
+    public void testMethodInterceptor() throws Exception {
+        String expression = &quot;execution(* us.codecraft.tinyioc.*.*(..))&quot;;
+        AspectJExpressionPointcut aspectJExpressionPointcut = new AspectJExpressionPointcut();
+        aspectJExpressionPointcut.setExpression(expression);
+        boolean matches = aspectJExpressionPointcut.getMethodMatcher().matches(HelloWorldServiceImpl.class.getDeclaredMethod(&quot;helloWorld&quot;),HelloWorldServiceImpl.class);
+        Assert.assertTrue(matches);
+    }</pre> 
+ <span id="OSC_h2_4"></span> 
+ <h2>9.step9-将AOP融入Bean的创建过程</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-9-auto-create-aop-proxy</pre> 
+ <p>万事俱备，只欠东风！现在我们有了Pointcut和Weave技术，一个AOP已经算是完成了，但是它还没有结合到Spring中去。怎么进行结合呢？Spring给了一个巧妙的答案：使用<code>BeanPostProcessor</code>。</p> 
+ <p>BeanPostProcessor是BeanFactory提供的，在Bean初始化过程中进行扩展的接口。只要你的Bean实现了<code>BeanPostProcessor</code>接口，那么Spring在初始化时，会优先找到它们，并且在Bean的初始化过程中，调用这个接口，从而实现对BeanFactory核心无侵入的扩展。</p> 
+ <p>那么我们的AOP是怎么实现的呢？我们知道，在AOP的xml配置中，我们会写这样一句话：</p> 
+ <pre class="brush: xml; auto-links: false;">&lt;aop:aspectj-autoproxy/&gt;</pre> 
+ <p>它其实相当于：</p> 
+ <pre class="brush: xml; auto-links: false;">&lt;bean id=&quot;autoProxyCreator&quot; class=&quot;org.springframework.aop.aspectj.autoproxy.AspectJAwareAdvisorAutoProxyCreator&quot;&gt;&lt;/bean&gt;</pre> 
+ <p><code>AspectJAwareAdvisorAutoProxyCreator</code>就是AspectJ方式实现织入的核心。它其实是一个BeanPostProcessor。在这里它会扫描所有Pointcut，并对bean做织入。</p> 
+ <p>为了简化xml配置，我在tiny-spring中直接使用Bean的方式，而不是用aop前缀进行配置：</p> 
+ <pre class="brush: xml; auto-links: false;">&lt;bean id=&quot;autoProxyCreator&quot; class=&quot;us.codecraft.tinyioc.aop.AspectJAwareAdvisorAutoProxyCreator&quot;&gt;&lt;/bean&gt;
+
+    &lt;bean id=&quot;timeInterceptor&quot; class=&quot;us.codecraft.tinyioc.aop.TimerInterceptor&quot;&gt;&lt;/bean&gt;
+
+    &lt;bean id=&quot;aspectjAspect&quot; class=&quot;us.codecraft.tinyioc.aop.AspectJExpressionPointcutAdvisor&quot;&gt;
+        &lt;property name=&quot;advice&quot; ref=&quot;timeInterceptor&quot;&gt;&lt;/property&gt;
+        &lt;property name=&quot;expression&quot; value=&quot;execution(* us.codecraft.tinyioc.*.*(..))&quot;&gt;&lt;/property&gt;
+    &lt;/bean&gt;</pre> 
+ <p><code>TimerInterceptor</code>实现了<code>MethodInterceptor</code>（实际上Spring中还有<code>Advice</code>这样一个角色，为了简单，就直接用MethodInterceptor了）。</p> 
+ <p>至此，一个AOP基本完工。</p> 
+ <span id="OSC_h2_5"></span> 
+ <h2>10.step10-使用CGLib进行类的织入</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-10-invite-cglib-and-aopproxy-factory</pre> 
+ <p>前面的JDK动态代理只能对接口进行代理，对于类则无能为力。这里我们需要一些字节码操作技术。这方面大概有几种选择：<code>ASM</code>，<code>CGLi
