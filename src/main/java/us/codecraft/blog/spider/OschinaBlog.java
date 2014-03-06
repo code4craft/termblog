@@ -30,7 +30,7 @@ public class OschinaBlog implements Comparable<OschinaBlog>{
     private Date date;
 
     public static void main(String[] args) {
-        JstermJsonPipleine jstermJsonPipleine = new JstermJsonPipleine("/data/");
+        JstermJsonPipleine jstermJsonPipleine = new JstermJsonPipleine("/data/oschinablog/");
         OOSpider.create(Site.me().setSleepTime(100).setUserAgent("Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0)"),
                 jstermJsonPipleine, OschinaBlog.class)
                 .addUrl("http://my.oschina.net/flashsword/blog").thread(1).run();
