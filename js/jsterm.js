@@ -485,12 +485,11 @@
    }
 
    var term = Object.create(Terminal);
-   term.init(CONFIG, '/json/oschina.json', COMMANDS, function() {
+   term.init(CONFIG, 'json/oschina.json', COMMANDS, function() {
       term.enqueue('login')
           .enqueue('yihua')
           .enqueue('******')
           .enqueue('cat README')
-          .enqueue('ls -l')
           .enqueue('tree')
           .begin();
    });
