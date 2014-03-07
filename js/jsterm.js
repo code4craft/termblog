@@ -493,8 +493,11 @@
           .enqueue('yihua')
           .enqueue('******')
           .enqueue('cat README')
-          .enqueue('help')
-          .begin();
+          .enqueue('help');
+      if (self.document.location.hash.length>1){
+          term.enqueue(decodeURIComponent(self.document.location.hash.substring(1)));
+      }
+      term.begin();
    });
 
    window.typeCommand = function(command) {

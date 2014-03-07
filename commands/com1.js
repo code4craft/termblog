@@ -38,6 +38,7 @@ COMMANDS.cat =  function(argv, cb) {
       else if (entry.type === 'dir')
          this._terminal.write('cat: ' + filename + ': Is a directory.');
       else
+         self.document.location.hash=encodeURIComponent("cat "+argv)
          this._terminal.write(entry.contents);
       if (i !== filenames.length - 1)
          this._terminal.write('<br>');
@@ -89,6 +90,7 @@ COMMANDS.ls = function(argv, cb) {
       }
    }.bind(this._terminal);
 
+   self.document.location.hash=encodeURIComponent("ls "+argv)
    if (!entry)
       this._terminal.write('ls: cannot access ' + filename + ': No such file or directory');
    else if (entry.type === 'dir') {
@@ -199,16 +201,16 @@ COMMANDS.tree = function(argv, cb) {
    cb();
 }
 
-COMMANDS.help = function(argv, cb) {
-   this._terminal.write(
-         ' \u6587\u7AE0\u548C\u76EE\u5F55\u5747\u53EF\u4EE5\u70B9\u51FB\u8BBF\u95EE\u3002<br>'
-+ ' \u67E5\u770B\u6587\u7AE0\u5217\u8868\u8BF7\u4F7F\u7528 <span class="dir"><a href="javascript:void(0)" onclick="typeCommand(\'ls -l\')">ls -l</a></span><br> '
-+ '\u67E5\u770B\u6240\u6709\u6587\u7AE0\u7ED3\u6784\u8BF7\u4F7F\u7528 <span class="exec"><a href="javascript:void(0)" onclick="typeCommand(\'tree\')">tree</a></span><br>'
-+ ' \u6E05\u9664\u5C4F\u5E55\u8BF7\u4F7F\u7528<span class="img"><a href="javascript:void(0)" onclick="typeCommand(\'clear\')">clear</a></span>\u6216\u8005CTRL+L<br><br>');
-   this._terminal.write('\u652F\u6301\u4EE5\u4E0B\u547D\u4EE4:<br>');
-   for (var c in this._terminal.commands) {
-      if (this._terminal.commands.hasOwnProperty(c) && !c.startswith('_'))
-         this._terminal.write(c + '  ');
-   }
-   cb();
+COMMANDS.help = function (argv, cb) {
+    this._terminal.write(
+        'You can view all articles and categories by just <span class="exec">click</span>.<br>'
+            + 'View all categories by command <span class="dir"><a href="javascript:void(0)" onclick="typeCommand(\'ls -l\')">ls -l</a></span><br>'
+            + 'View all categories and articles structure by command <span class="exec"><a href="javascript:void(0)" onclick="typeCommand(\'tree\')">tree</a></span><br>'
+            + 'Clear the terminal by command <span class="img"><a href="javascript:void(0)" onclick="typeCommand(\'clear\')">clear</a></span> or press CTRL+L<br><br>');
+    this._terminal.write('All Commands:<br>');
+    for (var c in this._terminal.commands) {
+        if (this._terminal.commands.hasOwnProperty(c) && !c.startswith('_'))
+            this._terminal.write(c + '  ');
+    }
+    cb();
 }

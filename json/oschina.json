@@ -1,7 +1,7 @@
 {
 	"contents":[
 	{
-               "contents":" 欢迎光临我的blog<br> 该blog使用<span class='dir'><a href='https://github.com/clarkduvall/jsterm'>jsterm</a></span>搭建<br> 该博客由我的<span class='exec'><a href='http://my.oschina.net/flashsword/blog'>oschina博客</a></span>搬家过来，爬虫部分基于我的开源框架<span class='img'><a href='https://github.com/code4craft/webmagic'>WebMagic</a></span><br> 这个博客的代码地址：<span class='dir'> <a href='https://github.com/code4craft/termblog'>https://github.com/code4craft/termblog</a></span>",
+               "contents":"Welcome to the blog of yihua. <br>It is built on <span class='dir'><a href='https://github.com/clarkduvall/jsterm'>jsterm</a></span>.<br>The articles are backuped from my <span class='exec'><a href='http://my.oschina.net/flashsword/blog'>oschina blog</a></span>.<br>The crawler is based on my crawler framework <span class='img'><a href='https://github.com/code4craft/webmagic'>WebMagic</a></span>.<br>View source code：<span class='dir'> <a href='https://github.com/code4craft/termblog'>https://github.com/code4craft/termblog</a></span>",
                "name":"README",
                "type":"text"
       },
