@@ -490,7 +490,14 @@
           .enqueue('yihua')
           .enqueue('******')
           .enqueue('cat README')
-          .enqueue('tree')
+          .enqueue('echo \u6211\u7684\u51E0\u7BC7\u7CFB\u5217\u6587\u7AE0:')
+          .enqueue('cd jsoup')
+          .enqueue('ls -l')
+          .enqueue('cd ../Netty')
+          .enqueue('ls -l')
+          .enqueue('cd ..')
+          .enqueue('echo \u67E5\u770B\u6240\u6709\u6587\u7AE0\uFF0C\u8BF7\u8F93\u5165tree')
+          .enqueue('echo \u6E05\u9664\u5C4F\u5E55\uFF0C\u8BF7\u8F93\u5165clear')
           .begin();
    });
 

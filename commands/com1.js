@@ -45,6 +45,13 @@ COMMANDS.cat =  function(argv, cb) {
    cb();
 }
 
+COMMANDS.echo =  function(argv, cb) {
+   var text = argv,
+       stdout;
+       this._terminal.write(text);
+   cb();
+}
+
 COMMANDS.cd = function(argv, cb) {
    var filename = this._terminal.parseArgs(argv).filenames[0],
        entry;
