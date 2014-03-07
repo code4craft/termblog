@@ -91,7 +91,6 @@ COMMANDS.ls = function(argv, cb) {
    }.bind(this._terminal);
 
    self.document.location.hash=encodeURIComponent("ls "+argv)
-   this._terminal.scroll();
    if (!entry)
       this._terminal.write('ls: cannot access ' + filename + ': No such file or directory');
    else if (entry.type === 'dir') {
@@ -109,6 +108,7 @@ COMMANDS.ls = function(argv, cb) {
       maxLen = entry.name.length;
       writeEntry(entry, filename);
    }
+   this._terminal.scroll();
    cb();
 }
 
@@ -135,6 +135,7 @@ COMMANDS.gimp = function(argv, cb) {
       if ('caption' in entry)
          this._terminal.write('<br/>' + entry.caption);
    }
+   this._terminal.scroll();
    cb();
 }
 
