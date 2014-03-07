@@ -1,0 +1,101 @@
+<h2>1000行代码读懂Spring（一）- 实现一个基本的IoC容器</h2><div class="BlogContent">
+ <span id="OSC_h2_1"></span> 
+ <h2>引言</h2> 
+ <p>最近在读Spring源码，但是Spring代码层次嵌套太多，读起来有很大跳跃性，我有个朋友甚至开玩笑说，读Spring得拿纸笔，把方法和层次都写下来。</p> 
+ <p>其实Spring我已经接触很久了，记得大学有个老师说过：“学一门技术，最好是先思考一下，如果是你，会怎么实现，再带着问题去学习它”。也有人把程序员与画家做比较，画家有门基本功叫临摹，我想程序员是不是也可以用这样的方式，学习一下世界顶级的项目的编程方法？</p> 
+ <p>于是就有了<a href="https://github.com/code4craft/tiny-spring" rel="nofollow"><code>tiny-spring</code></a>。这个项目是从我的使用场景出发，理解Spring的功能，并且一步一步完善出来的。类和方法命名基本都是照搬Spring的，包括一些配置格式都相同。这个项目我会控制在1000行以内，但是会尽量覆盖Spring的IoC和AOP核心功能。</p> 
+ <p><code>tiny-spring</code>是逐步进行构建的，里程碑版本我都使用了git tag来管理。例如，最开始的tag是<code>step-1-container-register-and-get</code>，那么可以使用</p> 
+ <pre class="brush: java; auto-links: false;">git checkout step-1-container-register-and-get</pre> 
+ <p>来获得这一版本。</p> 
+ <p>这次主要是学习IoC部分，以下是各版本的记录：</p> 
+ <span id="OSC_h2_2"></span> 
+ <h2>1.step1-最基本的容器</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-1-container-register-and-get</pre> 
+ <p>IoC最基本的角色有两个：容器(<code>BeanFactory</code>)和Bean本身。这里使用<code>BeanDefinition</code>来封装了bean对象，这样可以保存一些额外的元信息。测试代码：</p> 
+ <pre class="brush: java; auto-links: false;">// 1.初始化beanfactory
+BeanFactory beanFactory = new BeanFactory();
+
+// 2.注入bean
+BeanDefinition beanDefinition = new BeanDefinition(new HelloWorldService());
+beanFactory.registerBeanDefinition(&quot;helloWorldService&quot;, beanDefinition);
+
+// 3.获取bean
+HelloWorldService helloWorldService = (HelloWorldService) beanFactory.getBean(&quot;helloWorldService&quot;);
+helloWorldService.helloWorld();</pre> 
+ <span id="OSC_h2_3"></span> 
+ <h2>2.step2-将bean创建放入工厂</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-2-abstract-beanfactory-and-do-bean-initilizing-in-it</pre> 
+ <p>step1中的bean是初始化好之后再set进去的，实际使用中，我们希望容器来管理bean的创建。于是我们将bean的初始化放入BeanFactory中。为了保证扩展性，我们使用Extract Interface的方法，将<code>BeanFactory</code>替换成接口，而使用<code>AbstractBeanFactory</code>和<code>AutowireCapableBeanFactory</code>作为其实现。“AutowireCapable&quot;的意思是“可自动装配的”，为我们后面注入属性做准备。</p> 
+ <pre class="brush: java; auto-links: false;">// 1.初始化beanfactory
+BeanFactory beanFactory = new AutowireCapableBeanFactory();
+
+// 2.注入bean
+BeanDefinition beanDefinition = new BeanDefinition();
+beanDefinition.setBeanClassName(&quot;us.codecraft.tinyioc.HelloWorldService&quot;);
+beanFactory.registerBeanDefinition(&quot;helloWorldService&quot;, beanDefinition);
+
+// 3.获取bean
+HelloWorldService helloWorldService = (HelloWorldService) beanFactory.getBean(&quot;helloWorldService&quot;);
+helloWorldService.helloWorld();</pre> 
+ <span id="OSC_h2_4"></span> 
+ <h2>3.step3-为bean注入属性</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-3-inject-bean-with-property</pre> 
+ <p>这一步，我们想要为bean注入属性。我们选择将属性注入信息保存成<code>PropertyValue</code>对象，并且保存到<code>BeanDefinition</code>中。这样在初始化bean的时候，我们就可以根据PropertyValue来进行bean属性的注入。Spring本身使用了setter来进行注入，这里为了代码简洁，我们使用Field的形式来注入。</p> 
+ <pre class="brush: java; auto-links: false;">// 1.初始化beanfactory
+BeanFactory beanFactory = new AutowireCapableBeanFactory();
+
+// 2.bean定义
+BeanDefinition beanDefinition = new BeanDefinition();
+beanDefinition.setBeanClassName(&quot;us.codecraft.tinyioc.HelloWorldService&quot;);
+
+// 3.设置属性
+PropertyValues propertyValues = new PropertyValues();
+propertyValues.addPropertyValue(new PropertyValue(&quot;text&quot;, &quot;Hello World!&quot;));
+beanDefinition.setPropertyValues(propertyValues);
+
+// 4.生成bean
+beanFactory.registerBeanDefinition(&quot;helloWorldService&quot;, beanDefinition);
+
+// 5.获取bean
+HelloWorldService helloWorldService = (HelloWorldService) beanFactory.getBean(&quot;helloWorldService&quot;);
+helloWorldService.helloWorld();</pre> 
+ <span id="OSC_h2_5"></span> 
+ <h2>4.step4-读取xml配置来初始化bean</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-4-config-beanfactory-with-xml</pre> 
+ <p>这么大一坨初始化代码让人心烦。这里的<code>BeanDefinition</code>只是一些配置，我们还是用xml来初始化吧。我们定义了<code>BeanDefinitionReader</code>初始化bean，它有一个实现是<code>XmlBeanDefinitionReader</code>。</p> 
+ <pre class="brush: java; auto-links: false;">// 1.读取配置
+XmlBeanDefinitionReader xmlBeanDefinitionReader = new XmlBeanDefinitionReader(new ResourceLoader());
+xmlBeanDefinitionReader.loadBeanDefinitions(&quot;tinyioc.xml&quot;);
+
+// 2.初始化BeanFactory并注册bean
+BeanFactory beanFactory = new AutowireCapableBeanFactory();
+for (Map.Entry&lt;String, BeanDefinition&gt; beanDefinitionEntry : xmlBeanDefinitionReader.getRegistry().entrySet()) {
+        beanFactory.registerBeanDefinition(beanDefinitionEntry.getKey(), beanDefinitionEntry.getValue());
+}
+
+// 3.获取bean
+HelloWorldService helloWorldService = (HelloWorldService) beanFactory.getBean(&quot;helloWorldService&quot;);
+helloWorldService.helloWorld();</pre> 
+ <span id="OSC_h2_6"></span> 
+ <h2>5.step5-为bean注入bean</h2> 
+ <pre class="brush: java; auto-links: false;">git checkout step-5-inject-bean-to-bean</pre> 
+ <p>使用xml配置之后，似乎里我们熟知的Spring更近了一步！但是现在有一个大问题没有解决：我们无法处理bean之间的依赖，无法将bean注入到bean中，所以它无法称之为完整的IoC容器！如何实现呢？我们定义一个<code>BeanReference</code>，来表示这个属性是对另一个bean的引用。这个在读取xml的时候初始化，并在初始化bean的时候，进行解析和真实bean的注入。</p> 
+ <pre class="brush: java; auto-links: false;">for (PropertyValue propertyValue : mbd.getPropertyValues().getPropertyValues()) {
+    Field declaredField = bean.getClass().getDeclaredField(propertyValue.getName());
+    declaredField.setAccessible(true);
+    Object value = propertyValue.getValue();
+    if (value instanceof BeanReference) {
+        BeanReference beanReference = (BeanReference) value;
+        value = getBean(beanReference.getName());
+    }
+    declaredField.set(bean, value);
+}</pre> 
+ <p>同时为了解决循环依赖的问题，我们使用lazy-init的方式，将createBean的事情放到<code>getBean</code>的时候才执行，是不是一下子方便很多？这样在注入bean的时候，如果该属性对应的bean找不到，那么就先创建！因为总是先创建后注入，所以不会存在两个循环依赖的bean创建死锁的问题。</p> 
+ <pre class="brush: java; auto-links: false;">// 1.读取配置
+XmlBeanDefinitionReader xmlBeanDefinitionReader = new XmlBeanDefinitionReader(new ResourceLoader());
+xmlBeanDefinitionReader.loadBeanDefinitions(&quot;tinyioc.xml&quot;);
+
+// 2.初始化BeanFactory并注册bean
+AbstractBeanFactory beanFactory = new AutowireCapableBeanFactory();
+for (Map.Entry&lt;String, BeanDefinition&gt; beanDefinitionEntry : xmlBeanDefinitionReader.getRegistry().entrySet()) {
+    beanFactory.registerBeanDefinition(beanDefinitionEntry.getKey(), beanDefinitionEntry.getVa

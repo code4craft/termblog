@@ -53,7 +53,7 @@ public class JstermJsonPipleine implements PageModelPipeline<OschinaBlog> {
             }
         }
         try {
-            JSON.writeJSONStringTo(root, new FileWriter(filePath + java.io.File.separator + "oschina.json"), SerializerFeature.PrettyFormat, SerializerFeature.BrowserCompatible);
+            JSON.writeJSONStringTo(root, new FileWriter(filePath + java.io.File.separator + "oschina.json"), SerializerFeature.PrettyFormat,SerializerFeature.BrowserCompatible);
         } catch (IOException e) {
             e.printStackTrace();
         }

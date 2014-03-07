@@ -1,0 +1,53 @@
+<h2>Netty那点事（三）Channel与Pipeline</h2><div class="BlogContent">
+ <p>Channel是理解和使用Netty的核心。Channel的涉及内容较多，这里我使用由浅入深的介绍方法。在这篇文章中，我们主要介绍Channel部分中Pipeline实现机制。为了避免枯燥，借用一下《盗梦空间》的“梦境”概念，希望大家喜欢。</p> 
+ <span id="OSC_h2_1"></span> 
+ <h2>一层梦境：Channel实现概览</h2> 
+ <p>在Netty里，<code>Channel</code>是通讯的载体，而<code>ChannelHandler</code>负责Channel中的逻辑处理。</p> 
+ <p>那么<code>ChannelPipeline</code>是什么呢？我觉得可以理解为ChannelHandler的容器：一个Channel包含一个ChannelPipeline，所有ChannelHandler都会注册到ChannelPipeline中，并按顺序组织起来。</p> 
+ <p>在Netty中，<code>ChannelEvent</code>是数据或者状态的载体，例如传输的数据对应<code>MessageEvent</code>，状态的改变对应<code>ChannelStateEvent</code>。当对Channel进行操作时，会产生一个ChannelEvent，并发送到<code>ChannelPipeline</code>。ChannelPipeline会选择一个ChannelHandler进行处理。这个ChannelHandler处理之后，可能会产生新的ChannelEvent，并流转到下一个ChannelHandler。</p> 
+ <p><img src="http://static.oschina.net/uploads/space/2013/0921/174032_18rb_190591.png" alt="channel pipeline" /></p> 
+ <p>例如，一个数据最开始是一个<code>MessageEvent</code>，它附带了一个未解码的原始二进制消息<code>ChannelBuffer</code>，然后某个Handler将其解码成了一个数据对象，并生成了一个新的<code>MessageEvent</code>，并传递给下一步进行处理。</p> 
+ <p>到了这里，可以看到，其实Channel的核心流程位于<code>ChannelPipeline</code>中。于是我们进入ChannelPipeline的深层梦境里，来看看它具体的实现。</p> 
+ <span id="OSC_h2_2"></span> 
+ <h2>二层梦境：ChannelPipeline的主流程</h2> 
+ <p>Netty的ChannelPipeline包含两条线路：Upstream和Downstream。Upstream对应上行，接收到的消息、被动的状态改变，都属于Upstream。Downstream则对应下行，发送的消息、主动的状态改变，都属于Downstream。<code>ChannelPipeline</code>接口包含了两个重要的方法:<code>sendUpstream(ChannelEvent e)</code>和<code>sendDownstream(ChannelEvent e)</code>，就分别对应了Upstream和Downstream。</p> 
+ <p>对应的，ChannelPipeline里包含的ChannelHandler也包含两类：<code>ChannelUpstreamHandler</code>和<code>ChannelDownstreamHandler</code>。每条线路的Handler是互相独立的。它们都很简单的只包含一个方法：<code>ChannelUpstreamHandler.handleUpstream</code>和<code>ChannelDownstreamHandler.handleDownstream</code>。</p> 
+ <p>Netty官方的javadoc里有一张图(<code>ChannelPipeline</code>接口里)，非常形象的说明了这个机制(我对原图进行了一点修改，加上了<code>ChannelSink</code>，因为我觉得这部分对理解代码流程会有些帮助)：</p> 
+ <p><img src="http://static.oschina.net/uploads/space/2013/1109/075339_Kjw6_190591.png" alt="channel pipeline" /></p> 
+ <p>什么叫<code>ChannelSink</code>呢？ChannelSink包含一个重要方法<code>ChannelSink.eventSunk</code>，可以接受任意ChannelEvent。“sink&quot;的意思是&quot;下沉”，那么&quot;ChannelSink&quot;好像可以理解为&quot;Channel下沉的地方”？实际上，它的作用确实是这样，也可以换个说法：“处于末尾的万能Handler”。最初读到这里，也有些困惑，这么理解之后，就感觉简单许多。<strong>只有Downstream包含<code>ChannelSink</code></strong>，这里会做一些建立连接、绑定端口等重要操作。为什么UploadStream没有ChannelSink呢？我只能认为，一方面，不符合&quot;sink&quot;的意义，另一方面，也没有什么处理好做的吧！</p> 
+ <p>这里有个值得注意的地方：在一条“流”里，一个<code>ChannelEvent</code>并不会主动的&quot;流&quot;经所有的Handler，而是由<strong>上一个Handler显式的调用<code>ChannelPipeline.sendUp(Down)stream</code>产生，并交给下一个Handler处理</strong>。也就是说，每个Handler接收到一个ChannelEvent，并处理结束后，如果需要继续处理，那么它需要调用<code>sendUp(Down)stream</code>新发起一个事件。如果它不再发起事件，那么处理就到此结束，即使它后面仍然有Handler没有执行。这个机制可以保证最大的灵活性，当然对Handler的先后顺序也有了更严格的要求。</p> 
+ <p>顺便说一句，在Netty 3.x里，这个机制会导致大量的ChannelEvent对象创建，因此Netty 4.x版本对此进行了改进。twitter的<a href="https://github.com/twitter/finagle" rel="nofollow">finagle</a>框架实践中，就提到从Netty 3.x升级到Netty 4.x，可以大大降低GC开销。有兴趣的可以看看这篇文章：<a href="https://blog.twitter.com/2013/netty-4-at-twitter-reduced-gc-overhead" rel="nofollow">https://blog.twitter.com/2013/netty-4-at-twitter-reduced-gc-overhead</a></p> 
+ <p>下面我们从代码层面来对这里面发生的事情进行深入分析，这部分涉及到一些细节，需要打开项目源码，对照来看，会比较有收获。</p> 
+ <span id="OSC_h2_3"></span> 
+ <h2>三层梦境：深入ChannelPipeline内部</h2> 
+ <span id="OSC_h3_4"></span> 
+ <h3>DefaultChannelPipeline的内部结构</h3> 
+ <p><code>ChannelPipeline</code>的主要的实现代码在<code>DefaultChannelPipeline</code>类里。列一下DefaultChannelPipeline的主要字段：</p> 
+ <pre class="brush: java; auto-links: false;">public class DefaultChannelPipeline implements ChannelPipeline {
+
+        private volatile Channel channel;
+        private volatile ChannelSink sink;
+        private volatile DefaultChannelHandlerContext head;
+        private volatile DefaultChannelHandlerContext tail;
+        private final Map&lt;String, DefaultChannelHandlerContext&gt; name2ctx =
+            new HashMap&lt;String, DefaultChannelHandlerContext&gt;(4);
+    }</pre> 
+ <p>这里需要介绍一下<code>ChannelHandlerContext</code>这个接口。顾名思义，ChannelHandlerContext保存了Netty与Handler相关的的上下文信息。而咱们这里的<code>DefaultChannelHandlerContext</code>，则是对<code>ChannelHandler</code>的一个包装。一个<code>DefaultChannelHandlerContext</code>内部，除了包含一个<code>ChannelHandler</code>，还保存了&quot;next&quot;和&quot;prev&quot;两个指针，从而形成一个双向链表。</p> 
+ <p>因此，在<code>DefaultChannelPipeline</code>中，我们看到的是对<code>DefaultChannelHandlerContext</code>的引用，而不是对<code>ChannelHandler</code>的直接引用。这里包含&quot;head&quot;和&quot;tail&quot;两个引用，分别指向链表的头和尾。而name2ctx则是一个按名字索引DefaultChannelHandlerContext用户的一个map，主要在按照名称删除或者添加ChannelHandler时使用。</p> 
+ <span id="OSC_h3_5"></span> 
+ <h3>sendUpstream和sendDownstream</h3> 
+ <p>前面提到了，<code>ChannelPipeline</code>接口的两个重要的方法：<code>sendUpstream(ChannelEvent e)</code>和<code>sendDownstream(ChannelEvent e)</code>。<strong>所有事件</strong>的发起都是基于这两个方法进行的。<code>Channels</code>类有一系列<code>fireChannelBound</code>之类的<code>fireXXXX</code>方法，其实都是对这两个方法的facade包装。</p> 
+ <p>下面来看一下这两个方法的实现(对代码做了一些简化，保留主逻辑)：</p> 
+ <pre class="brush: java; auto-links: false;">public void sendUpstream(ChannelEvent e) {
+        DefaultChannelHandlerContext head = getActualUpstreamContext(this.head);
+        head.getHandler().handleUpstream(head, e);
+    }
+
+    private DefaultChannelHandlerContext getActualUpstreamContext(DefaultChannelHandlerContext ctx) {
+        DefaultChannelHandlerContext realCtx = ctx;
+        while (!realCtx.canHandleUpstream()) {
+            realCtx = realCtx.next;
+            if (realCtx == null) {
+                return null;
+            }
+ 
