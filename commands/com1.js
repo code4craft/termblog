@@ -201,16 +201,11 @@ COMMANDS.tree = function(argv, cb) {
 
 COMMANDS.help = function(argv, cb) {
    this._terminal.write(
-       'You can navigate either by clicking on anything that ' +
-       '<a href="javascript:void(0)">underlines</a> when you put your mouse ' +
-       'over it, or by typing commands in the terminal. Type the name of a ' +
-       '<span class="exec">link</span> to view it. Use "cd" to change into a ' +
-       '<span class="dir">directory</span>, or use "ls" to list the contents ' +
-       'of that directory. The contents of a <span class="text">file</span> ' +
-       'can be viewed using "cat". <span class="img">Images</span> are ' +
-       'displayed using "gimp".<br><br>If there is a command you want to get ' +
-       'out of, press Ctrl+C or Ctrl+D.<br><br>');
-   this._terminal.write('Commands are:<br>');
+         ' \u6587\u7AE0\u548C\u76EE\u5F55\u5747\u53EF\u4EE5\u70B9\u51FB\u8BBF\u95EE\u3002<br>'
++ ' \u67E5\u770B\u6587\u7AE0\u5217\u8868\u8BF7\u4F7F\u7528 <span class="dir"><a href="javascript:void(0)" onclick="typeCommand(\'ls -l\')">ls -l</a></span><br> '
++ '\u67E5\u770B\u6240\u6709\u6587\u7AE0\u7ED3\u6784\u8BF7\u4F7F\u7528 <span class="exec"><a href="javascript:void(0)" onclick="typeCommand(\'tree\')">tree</a></span><br>'
++ ' \u6E05\u9664\u5C4F\u5E55\u8BF7\u4F7F\u7528<span class="img"><a href="javascript:void(0)" onclick="typeCommand(\'clear\')">clear</a></span>\u6216\u8005CTRL+L<br><br>');
+   this._terminal.write('\u652F\u6301\u4EE5\u4E0B\u547D\u4EE4:<br>');
    for (var c in this._terminal.commands) {
       if (this._terminal.commands.hasOwnProperty(c) && !c.startswith('_'))
          this._terminal.write(c + '  ');
