@@ -18,7 +18,7 @@ COMMANDS.cat =  function(argv, cb) {
    var filenames = this._terminal.parseArgs(argv).filenames,
        stdout;
 
-   this._terminal.scroll();
+//   this._terminal.scroll();
    if (!filenames.length) {
       this._terminal.returnHandler = function() {
          stdout = this.stdout();
@@ -91,6 +91,7 @@ COMMANDS.ls = function(argv, cb) {
    }.bind(this._terminal);
 
    self.document.location.hash=encodeURIComponent("ls "+argv)
+   this._terminal.scroll();
    if (!entry)
       this._terminal.write('ls: cannot access ' + filename + ': No such file or directory');
    else if (entry.type === 'dir') {
@@ -198,6 +199,7 @@ COMMANDS.tree = function(argv, cb) {
    this._terminal.writeLink(home, '~');
    this._terminal.write('<br>');
    writeTree(home, 0);
+   this._terminal.scroll();
    cb();
 }
 

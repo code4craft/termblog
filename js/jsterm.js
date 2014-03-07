@@ -249,6 +249,10 @@
          window.scrollTo(0, document.body.scrollHeight);
       },
 
+      scrollUp: function() {
+           window.scrollTo(0, 0);
+       },
+
       parseArgs: function(argv) {
          var args = [],
              filenames = [],
@@ -388,7 +392,6 @@
          command.id = 'stdout';
          div.appendChild(command);
          this._toggleBlinker(0);
-         this.scroll();
       },
 
       _typeKey: function(key) {
@@ -489,15 +492,22 @@
 
    var term = Object.create(Terminal);
    term.init(CONFIG, 'json/oschina.json', COMMANDS, function() {
-      term.enqueue('login')
-          .enqueue('yihua')
-          .enqueue('******')
-          .enqueue('cat README')
-          .enqueue('help');
       if (self.document.location.hash.length>1){
-          term.enqueue(decodeURIComponent(self.document.location.hash.substring(1)));
+          term.enqueue('login')
+              .enqueue('yihua')
+              .enqueue('******')
+              .enqueue(decodeURIComponent(self.document.location.hash.substring(1)))
+              .enqueue('help')
+              .begin();
+          term.scrollUp();
+      }else {
+          term.enqueue('login')
+              .enqueue('yihua')
+              .enqueue('******')
+              .enqueue('cat README')
+              .enqueue('help')
+              .begin();
       }
-      term.begin();
    });
 
    window.typeCommand = function(command) {
